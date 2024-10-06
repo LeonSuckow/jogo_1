@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulação de Tecido com Canhão</title>
+  <style>
+    canvas {
+      background-color: lightblue;
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .controls input {
+      width: 100px;
+      margin-bottom: 5px;
+    }
+    .controls button {
+      width: 100px;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label for="rows">Rows:</label>
+    <input type="number" onchange="updateForm()" id="rows" value="50"><br>
+    
+    <label for="cols">Cols:</label>
+    <input type="number"  onchange="updateForm()" id="cols" value="100"><br>
+    
+    <label for="gravity">Gravity:</label>
+    <input type="number"  onchange="updateForm()" step="0.1" id="gravity" value="0.5"><br>
+
+    <label for="spacing">Spacing:</label>
+    <input type="number"  onchange="updateForm()" step="0.1" id="spacing" value="0"><br>
+    
+    <label for="friction">Friction:</label>
+    <input type="number"  onchange="updateForm()" step="0.01" id="friction" value="0.99"><br>
+    
+    <label for="stiffness">Stiffness:</label>
+    <input type="number"  onchange="updateForm()" step="0.1" id="stiffness" value="1"><br>
+    
+    <label for="dampingFactor">Damping:</label>
+    <input type="number"  onchange="updateForm()" step="0.1" id="dampingFactor" value="0.95"><br>
+    
+    <label for="maxCannonballSpeed">Max Speed:</label>
+    <input type="number"  onchange="updateForm()" step="1" id="maxCannonballSpeed" value="15"><br>
+    
+    <button id="reset">Reset</button>
+
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // let rows = 50;
+    // let cols = 100;
+    // let spacing = 0;
+    // let gravity = 0.5;
+    // let friction = 0.99;
+    // let stiffness = 1;
+    // let dampingFactor = 0.95;
+    // let maxCannonballSpeed = 15; 
+    const indicatorWidth = 60;
+
+
+   let rows = parseInt(document.getElementById('rows').value);
+   let cols = parseInt(document.getElementById('cols').value);
+   let gravity = parseFloat(document.getElementById('gravity').value);
+   let friction = parseFloat(document.getElementById('friction').value);
+   let stiffness = parseFloat(document.getElementById('stiffness').value);
+   let dampingFactor = parseFloat(document.getElementById('dampingFactor').value);
+   let maxCannonballSpeed = parseFloat(document.getElementById('maxCannonballSpeed').value);
+
+    const points = [];
+    const sticks = [];
+    let cannonX, cannonY;
+    const cannonballs = [];
+
+    // Carregar imagens
+    const cannonImage = new Image();
+    cannonImage.src = 'assets/canhao.png'; // URL da imagem do canhão
+    const cannonballImage = new Image();
+    cannonballImage.src = 'https://via.placeholder.com/20'; // URL da imagem da bola de canhão
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      spacing = Math.min(canvas.width / (cols - 1), canvas.height / (rows - 1));
+      cannonX = canvas.width - 151;
+      cannonY = canvas.height - 90;
+
+      points.length = 0;
+      sticks.length = 0;
+      init(); // Passar a posição inicial do tecido
+    }
+
+    class Point {
+      constructor(x, y, pinned = false) {
+        this.x = x;
+        this.y = y;
+        this.oldX = x;
+        this.oldY = y;
+        this.pinned = pinned;
+        this.affectedByGravity = true; // Se o ponto for afetado pela gravidade
+      }
+
+      update() {
+        if (this.pinned) return;
+
+        const velX = (this.x - this.oldX) * friction;
+        const velY = (this.y - this.oldY) * friction;
+
+        this.oldX = this.x;
+        this.oldY = this.y;
+
+        this.x += velX;
+        this.y += velY + gravity;
+
+        this.x = this.oldX + (this.x - this.oldX) * dampingFactor;
+        this.y = this.oldY + (this.y - this.oldY) * dampingFactor;
+
+        if (this.y > canvas.height) {
+          this.y = canvas.height;
+          this.oldY = this.y;
+        }
+
+        if (this.x > canvas.width) {
+          this.x = canvas.width;
+          this.oldX = this.x;
+        }
+      }
+    }
+
+    class Stick {
+      constructor(p1, p2) {
+        this.p1 = p1;
+        this.p2 = p2;
+        this.length = spacing;
+        this.broken = false;
+      }
+
+      update() {
+        if (this.broken) return;
+
+        const dx = this.p2.x - this.p1.x;
+        const dy = this.p2.y - this.p1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const difference = this.length - distance;
+        const percent = difference / distance / 2;
+        const offsetX = dx * percent * stiffness;
+        const offsetY = dy * percent * stiffness;
+
+        if (!this.p1.pinned) {
+          this.p1.x -= offsetX * dampingFactor;
+          this.p1.y -= offsetY * dampingFactor;
+        }
+
+        if (!this.p2.pinned) {
+          this.p2.x += offsetX * dampingFactor;
+          this.p2.y += offsetY * dampingFactor;
+        }
+      }
+
+      intersects(x, y, radius) {
+        const { x: x1, y: y1 } = this.p1;
+        const { x: x2, y: y2 } = this.p2;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const dot = ((x - x1) * dx + (y - y1) * dy) / Math.pow(length, 2);
+
+        const closestX = x1 + dot * dx;
+        const closestY = y1 + dot * dy;
+
+        const isOnSegment = dot >= 0 && dot <= 1;
+
+        const distX = x - closestX;
+        const distY = y - closestY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+
+        return isOnSegment && distance <= radius;
+      }
+    }
+
+    class Cannonball {
+      constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = 10;
+      }
+
+      update() {
+        this.vy += gravity * 0.1;
+        this.x += this.vx;
+        this.y += this.vy;
+      }
+
+      draw() {
+        ctx.drawImage(cannonballImage, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+      }
+
+      checkCollision() {
+        sticks.forEach(stick => {
+          if (stick.intersects(this.x, this.y, this.radius)) {
+            stick.broken = true;
+
+            // Marcar pontos abaixo do ponto atingido
+            const affectedPointIndex = points.indexOf(stick.p2);
+            if (affectedPointIndex !== -1) {
+              for (let i = affectedPointIndex; i < points.length; i++) {
+                points[i].affectedByGravity = true; // Abaixo do ponto atingido agora é afetado pela gravidade
+              }
+            }
+          }
+        });
+      }
+
+      isOffScreen() {
+        return this.x < 0 || this.y > canvas.height || this.x > canvas.width || this.y < 0;
+      }
+    }
+
+    function init() {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const pinned = y === 0;
+          const point = new Point(x * spacing,  y * spacing, pinned); // Usar startY para a posição y
+          points.push(point);
+
+          if (x > 0) {
+            sticks.push(new Stick(points[points.length - 1], points[points.length - 2]));
+          }
+
+          if (y > 0) {
+            sticks.push(new Stick(points[points.length - 1], points[points.length - cols]));
+          }
+        }
+      }
+    }
+
+    function updatePoints() {
+      points.forEach(point => point.update());
+    }
+
+    function updateSticks() {
+      sticks.forEach(stick => stick.update());
+    }
+
+    function drawPoints() {
+      points.forEach(point => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = "black";
+        ctx.fill();
+      });
+    }
+
+    function drawSticks() {
+      sticks.forEach(stick => {
+        if (stick.broken) return;
+        ctx.beginPath();
+        ctx.moveTo(stick.p1.x, stick.p1.y);
+        ctx.lineTo(stick.p2.x, stick.p2.y);
+        ctx.strokeStyle = "black";
+        ctx.stroke();
+      });
+    }
+
+    function drawCannon() {
+      ctx.drawImage(cannonImage, cannonX - 20, cannonY - 10, 151, 90); // Desenhar o canhão
+    }
+
+    function drawForceIndicator(force) {
+      ctx.fillStyle = 'red'; // Cor do indicador de força
+      ctx.fillRect(cannonX + 50, cannonY - 30, indicatorWidth, 10); // Base do indicador
+      ctx.fillStyle = 'green'; // Cor da parte preenchida
+      ctx.fillRect(cannonX + 50, cannonY - 30, force * (indicatorWidth / maxCannonballSpeed), 10); // Preenchimento proporcional à força
+    }
+
+    let isMouseDown = false;
+    let pressStartTime = 0;
+    let mouseX, mouseY;
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updatePoints();
+      updateSticks();
+      drawSticks();
+      drawPoints();
+      drawCannon();
+      
+      cannonballs.forEach(cannonball => {
+        cannonball.update();
+        cannonball.checkCollision();
+        cannonball.draw();
+      });
+
+      // Remover balas fora da tela
+      for (let i = cannonballs.length - 1; i >= 0; i--) {
+        if (cannonballs[i].isOffScreen()) {
+          cannonballs.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(update);
+      if (isMouseDown) {
+        const pressDuration = Date.now() - pressStartTime; // Duração do pressionamento
+        let force = Math.min(maxCannonballSpeed, pressDuration / 100); // Calcular a força com base no tempo (5 segundos)
+
+        // Ignorar se o tempo for maior que 5 segundos e garantir que a força não ultrapasse a máxima
+        if (pressDuration > 5000 || force > maxCannonballSpeed) {
+          force = maxCannonballSpeed; // Define força máxima se exceder 5 segundos
+        }
+        drawForceIndicator(force);
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    update();
+
+    canvas.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      pressStartTime = Date.now(); // Iniciar o tempo ao pressionar
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      isMouseDown = false;
+      const pressDuration = Date.now() - pressStartTime; // Duração do pressionamento
+      let force = Math.min(maxCannonballSpeed, pressDuration / 100); // Calcular a força com base no tempo (5 segundos)
+
+      // Ignorar se o tempo for maior que 5 segundos e garantir que a força não ultrapasse a máxima
+      if (pressDuration > 5000 || force > maxCannonballSpeed) {
+        force = maxCannonballSpeed; // Define força máxima se exceder 5 segundos
+      }
+
+      const dx = e.clientX - cannonX;
+      const dy = e.clientY - cannonY;
+      const angle = Math.atan2(dy, dx);
+
+      const vx = Math.cos(angle) * force;
+      const vy = Math.sin(angle) * force;
+
+      cannonballs.push(new Cannonball(cannonX, cannonY, vx, vy));
+
+      // Mudar a imagem do canhão para a imagem de disparo
+      cannonImage.src = 'assets/canhao_atirando.png';
+      setTimeout(() => {
+        cannonImage.src = 'assets/canhao.png'; // Retornar à imagem original
+      }, 200); // Esperar 200ms antes de voltar
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    function updateForm(){
+      rows = parseInt(document.getElementById('rows').value);
+      cols = parseInt(document.getElementById('cols').value);
+      gravity = parseFloat(document.getElementById('gravity').value);
+      friction = parseFloat(document.getElementById('friction').value);
+      stiffness = parseFloat(document.getElementById('stiffness').value);
+      dampingFactor = parseFloat(document.getElementById('dampingFactor').value);
+      maxCannonballSpeed = parseFloat(document.getElementById('maxCannonballSpeed').value);
+
+      resizeCanvas();
+    }
+
+    document.getElementById('reset').addEventListener('click', () => {
+
+      rows = 50;
+      cols = 100;
+      spacing = 0;
+      gravity = 0.5;
+      friction = 0.99;
+      stiffness = 1;
+      dampingFactor = 0.95;
+      maxCannonballSpeed = 15; 
+
+      document.getElementById('rows').value = rows;
+      document.getElementById('cols').value = cols;
+      document.getElementById('gravity').value = gravity;
+      document.getElementById('friction').value = friction;
+      document.getElementById('stiffness').value = stiffness;
+      document.getElementById('dampingFactor').value = dampingFactor;
+      document.getElementById('maxCannonballSpeed').value = maxCannonballSpeed;
+
+      resizeCanvas();
+    });
+  </script>
+</body>
+</html>
