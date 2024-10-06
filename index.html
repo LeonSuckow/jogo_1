@@ -254,7 +254,7 @@
           this.y = y;
           this.vx = vx;
           this.vy = vy;
-          this.radius = 50;
+          this.radius = 150;
         }
 
         update() {
@@ -452,7 +452,9 @@
           const max = 4;
           const result = Math.floor(Math.random() * (max - min + 1)) + min;
           let elementAudio = document.createElement("audio");
+          elementAudio.volume = 0.1;
           elementAudio.src = `./assets/audios/inri-${result}.mp3`;
+          
           elementAudio.play();
         }
 
