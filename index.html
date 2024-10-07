@@ -3,13 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Simulação de Tecido com Canhão</title>
+    <title>Disparauê 1</title>
     <style>
       canvas {
-        background-color: lightblue;
+        background-color: rgb(54, 54, 54);
         display: block;
         margin: 0;
         padding: 0;
+        cursor: url("https://raw.githubusercontent.com/coob113/fancy-cursors/master/target1.png")
+            64 64,
+          auto !important;
+      }
+      a {
+        cursor: url("https://raw.githubusercontent.com/coob113/fancy-cursors/master/target2.png")
+            64 64,
+          auto !important;
       }
       body,
       html {
@@ -435,9 +443,7 @@
         cannonballs.push(new Cannonball(cannonX, cannonY, vx, vy));
 
         // play no audio
-        audioPlayWhenFired()
-
-
+        audioPlayWhenFired();
 
         // Mudar a imagem do canhão para a imagem de disparo
         cannonImage.src = "assets/canhao_atirando.png";
@@ -446,17 +452,16 @@
         }, 200); // Esperar 200ms antes de voltar
       });
 
-
       function audioPlayWhenFired() {
-          const min = 1;
-          const max = 4;
-          const result = Math.floor(Math.random() * (max - min + 1)) + min;
-          let elementAudio = document.createElement("audio");
-          elementAudio.volume = 0.1;
-          elementAudio.src = `./assets/audios/inri-${result}.mp3`;
-          
-          elementAudio.play();
-        }
+        const min = 1;
+        const max = 4;
+        const result = Math.floor(Math.random() * (max - min + 1)) + min;
+        let elementAudio = document.createElement("audio");
+        elementAudio.volume = 0.1;
+        elementAudio.src = `./assets/audios/inri-${result}.mp3`;
+
+        elementAudio.play();
+      }
 
       canvas.addEventListener("mousemove", (e) => {
         mouseX = e.clientX;
